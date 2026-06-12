@@ -5,9 +5,17 @@ const { Jimp } = require('jimp');
 
 const OUTPUT_DIR = path.join(__dirname, 'output');
 const COLS = 2;
-const CELL_WIDTH = 400;
-const CELL_HEIGHT = 400;
+const MAX_IMAGES = 6;
 const PADDING = 10;
+const JPEG_QUALITY = 85;
+
+function getCellDimensions(imageCount) {
+  const rows = Math.ceil(imageCount / COLS);
+
+  if (rows === 1) return { width: 400, height: 400 };
+  if (rows === 2) return { width: 340, height: 340 };
+  return { width: 300, height: 300 };
+}
 
 async function downloadImage(url) {
   const response = await axios.get(url, { responseType: 'arraybuffer' });
@@ -29,9 +37,11 @@ async function createImageCollage(imageUrls) {
     throw new Error('آرایه عکس‌ها خالی است');
   }
 
-  const rows = Math.ceil(imageUrls.length / COLS);
-  const canvasWidth = COLS * CELL_WIDTH + (COLS + 1) * PADDING;
-  const canvasHeight = rows * CELL_HEIGHT + (rows + 1) * PADDING;
+  const images = imageUrls.slice(0, MAX_IMAGES);
+  const { width: cellWidth, height: cellHeight } = getCellDimensions(images.length);
+  const rows = Math.ceil(images.length / COLS);
+  const canvasWidth = COLS * cellWidth + (COLS + 1) * PADDING;
+  const canvasHeight = rows * cellHeight + (rows + 1) * PADDING;
 
   const canvas = new Jimp({
     width: canvasWidth,
@@ -39,29 +49,29 @@ async function createImageCollage(imageUrls) {
     color: 0xffffffff,
   });
 
-  for (let i = 0; i < imageUrls.length; i++) {
-    const imageBuffer = await downloadImage(imageUrls[i]);
-    const image = fitInside(await Jimp.read(imageBuffer), CELL_WIDTH, CELL_HEIGHT);
+  for (let i = 0; i < images.length; i++) {
+    const imageBuffer = await downloadImage(images[i]);
+    const image = fitInside(await Jimp.read(imageBuffer), cellWidth, cellHeight);
 
     const col = i % COLS;
     const row = Math.floor(i / COLS);
 
     const x =
       PADDING +
-      col * (CELL_WIDTH + PADDING) +
-      Math.floor((CELL_WIDTH - image.bitmap.width) / 2);
+      col * (cellWidth + PADDING) +
+      Math.floor((cellWidth - image.bitmap.width) / 2);
     const y =
       PADDING +
-      row * (CELL_HEIGHT + PADDING) +
-      Math.floor((CELL_HEIGHT - image.bitmap.height) / 2);
+      row * (cellHeight + PADDING) +
+      Math.floor((cellHeight - image.bitmap.height) / 2);
 
     canvas.composite(image, x, y);
   }
 
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 
-  const outputPath = path.join(OUTPUT_DIR, `collage-${Date.now()}.png`);
-  await canvas.write(outputPath);
+  const outputPath = path.join(OUTPUT_DIR, `collage-${Date.now()}.jpg`);
+  await canvas.write(outputPath, { quality: JPEG_QUALITY });
 
   return outputPath;
 }
